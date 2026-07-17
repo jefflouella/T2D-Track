@@ -635,8 +635,8 @@ async function renderMedicationNew(kind = 'medication') {
           <label>Strength unit<input name="strengthUnit" id="med-strength-unit" placeholder="${isSupp ? 'mg' : 'mg'}" /></label>
         </div>
         <label>Form<input name="form" id="med-form-field" placeholder="${isSupp ? 'softgel / capsule' : 'tablet'}" /></label>
-        <label>Stock unit<input name="stockUnit" required placeholder="tablets or capsules" /></label>
-        <label>Opening balance<input name="openingBalance" type="number" step="any" value="30" /></label>
+        <label>Stock unit (what you count: tablets, capsules, units…)<input name="stockUnit" required placeholder="tablets" /></label>
+        <label>Opening balance (how many you have now)<input name="openingBalance" type="number" step="any" value="30" /></label>
         <label>Default units per dose<input name="defaultUnitsPerDose" type="number" step="any" value="1" /></label>
         <label>Schedule type
           <select name="scheduleType">
@@ -652,7 +652,7 @@ async function renderMedicationNew(kind = 'medication') {
         <label>Dose entry
           <select name="doseEntry"><option value="fixed">Fixed</option><option value="variable">Variable</option></select>
         </label>
-        ${isSupp ? '' : '<label><input type="checkbox" name="trackInjectionSite" /> Track injection site</label>'}
+        ${isSupp ? '' : '<label><input type="checkbox" name="trackInjectionSite" /> Track injection site (pens/syringes only; leave off for tablets)</label>'}
         <label>Instructions<textarea name="instructions"></textarea></label>
         ${isSupp ? '' : '<label>Refill threshold days<input name="refillThresholdDays" type="number" value="7" /></label>'}
         <button type="submit">Save ${isSupp ? 'supplement' : 'medication'}</button>
@@ -755,6 +755,7 @@ async function renderMedicationDetail(id, kindHint = 'medication') {
     <section class="panel">
       <h1 class="hero-brand">${escapeHtml(medication.name)}</h1>
       <p class="meta"><span class="badge">${isSupp ? 'Supplement' : 'Medication'}</span>
+        ${medication.form ? `<span class="badge">${escapeHtml(medication.form)}</span>` : ''}
         Stock ${escapeHtml(medication.currentStockCache)} ${escapeHtml(medication.stockUnit)}
         · ${escapeHtml(medication.supply?.stockState)} · est. ${medication.supply?.estimatedDays ?? 'n/a'} days</p>
       <div class="actions">
@@ -765,6 +766,27 @@ async function renderMedicationDetail(id, kindHint = 'medication') {
         ${medication.status === 'paused' ? `<button class="secondary" id="btn-resume">Resume</button>` : ''}
         ${medication.schedules?.some((s) => s.scheduleType === 'as_needed') ? `<button class="secondary" id="btn-prn">Log as-needed</button>` : ''}
       </div>
+    </section>
+    <section class="panel">
+      <h2>Details</h2>
+      <p class="muted">Update form, instructions, and whether this is an injectable that needs a site each dose.</p>
+      <form id="med-edit-form" class="stack">
+        <div class="grid-2">
+          <label>Strength value<input name="strengthValue" value="${escapeHtml(medication.strengthValue ?? '')}" /></label>
+          <label>Strength unit<input name="strengthUnit" value="${escapeHtml(medication.strengthUnit || '')}" placeholder="mg" /></label>
+        </div>
+        <label>Form<input name="form" value="${escapeHtml(medication.form || '')}" placeholder="tablet, capsule, pen…" /></label>
+        <label>Stock unit<input name="stockUnit" value="${escapeHtml(medication.stockUnit || '')}" required placeholder="tablets or units" /></label>
+        <label>Default units per dose<input name="defaultUnitsPerDose" type="number" step="any" value="${escapeHtml(medication.defaultUnitsPerDose ?? '1')}" /></label>
+        <label>Instructions<textarea name="instructions">${escapeHtml(medication.instructions || '')}</textarea></label>
+        ${
+          isSupp
+            ? ''
+            : `<label><input type="checkbox" name="trackInjectionSite" ${medication.trackInjectionSite ? 'checked' : ''} /> Track injection site (pens/syringes only)</label>
+               <p class="muted" style="margin:0">Leave unchecked for tablets and capsules. When on, Today asks for a site each dose.</p>`
+        }
+        <button type="submit">Save details</button>
+      </form>
     </section>
     <section class="panel">
       <h2>Schedules</h2>
@@ -806,6 +828,29 @@ async function renderMedicationDetail(id, kindHint = 'medication') {
       </div>
     </section>
   `);
+
+  $('#med-edit-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      const body = {
+        form: fd.get('form') || null,
+        strengthValue: fd.get('strengthValue') || null,
+        strengthUnit: fd.get('strengthUnit') || null,
+        stockUnit: fd.get('stockUnit'),
+        defaultUnitsPerDose: fd.get('defaultUnitsPerDose'),
+        instructions: fd.get('instructions') || null,
+        trackInjectionSite: isSupp ? false : fd.get('trackInjectionSite') === 'on',
+      };
+      const result = await api(`/api/medications/${id}`, { method: 'PUT', body });
+      // Identity changes (strength/form/stock unit) replace the medication with a new id.
+      const nextId = result.medication?.id || id;
+      setFlash('Details saved', 'ok');
+      navigate(`${basePath}/${nextId}`);
+    } catch (err) {
+      setFlash(err.message, 'error');
+    }
+  });
 
   $('#btn-refill')?.addEventListener('click', async () => {
     const quantity = prompt('Refill quantity');
