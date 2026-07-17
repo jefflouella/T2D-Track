@@ -1,6 +1,14 @@
 // src/client/sw.js
-var CACHE = "t2d-shell-v3";
-var SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icons/icon.svg"];
+var CACHE = "t2d-shell-v4";
+var SHELL = [
+  "/",
+  "/index.html",
+  "/manifest.webmanifest",
+  "/icons/icon.svg",
+  "/icons/apple-touch-icon.png",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png"
+];
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
 });
