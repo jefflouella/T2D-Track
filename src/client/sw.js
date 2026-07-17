@@ -1,4 +1,4 @@
-const CACHE = 't2d-shell-v2';
+const CACHE = 't2d-shell-v3';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon.svg'];
 
 self.addEventListener('install', (event) => {

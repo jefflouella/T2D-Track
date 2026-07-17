@@ -1,5 +1,5 @@
 // src/client/sw.js
-var CACHE = "t2d-shell-v2";
+var CACHE = "t2d-shell-v3";
 var SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icons/icon.svg"];
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));

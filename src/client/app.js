@@ -949,8 +949,9 @@ async function renderMedicationDetail(id, kindHint = 'medication') {
 
 async function renderHealth() {
   const profile = requireProfile();
-  const [bs, summaries] = await Promise.all([
+  const [bs, ketones, summaries] = await Promise.all([
     api(`/api/profiles/${profile.id}/health/blood-sugar`),
+    api(`/api/profiles/${profile.id}/health/ketones`),
     api(`/api/profiles/${profile.id}/health/summaries`),
   ]);
   const app = $('#app');
@@ -971,6 +972,27 @@ async function renderHealth() {
               <option value="exercise">Exercise</option>
               <option value="illness">Illness</option>
               <option value="random">Random</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label>When<input name="takenAt" type="datetime-local" /></label>
+          <button type="submit">Save</button>
+        </form>
+        <h2 style="margin-top:1rem">Ketones</h2>
+        <form id="ketone-form" class="stack">
+          <label>Value<input name="value" type="number" step="any" required /></label>
+          <label>Unit
+            <select name="unit">
+              <option value="mmol_L">mmol/L</option>
+              <option value="mg_dL">mg/dL</option>
+            </select>
+          </label>
+          <label>Context
+            <select name="context">
+              <option value="fasting">Fasting</option>
+              <option value="random" selected>Random</option>
+              <option value="illness">Illness</option>
+              <option value="exercise">Exercise</option>
               <option value="other">Other</option>
             </select>
           </label>
@@ -1028,6 +1050,20 @@ async function renderHealth() {
           : `<p class="empty">No readings yet.</p>`
       }
     </section>
+    <section class="panel">
+      <h2>Recent ketones</h2>
+      ${
+        ketones.readings.length
+          ? `<ul>${ketones.readings
+              .slice(0, 12)
+              .map(
+                (r) =>
+                  `<li>${escapeHtml(new Date(r.takenAt).toLocaleString())}: ${escapeHtml(r.value)} ${escapeHtml(r.unit)} (${escapeHtml(r.context)})</li>`,
+              )
+              .join('')}</ul>`
+          : `<p class="empty">No ketone readings yet.</p>`
+      }
+    </section>
   `);
 
   $('#bs-form').addEventListener('submit', async (e) => {
@@ -1049,6 +1085,35 @@ async function renderHealth() {
             method: 'POST',
             body: { ...body, confirmUnusual: true },
           });
+          render();
+        }
+        return;
+      }
+      setFlash(err.message, 'error');
+      render();
+    }
+  });
+  $('#ketone-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const body = {
+      value: fd.get('value'),
+      unit: fd.get('unit'),
+      context: fd.get('context'),
+      takenAt: fd.get('takenAt') ? new Date(fd.get('takenAt')).toISOString() : undefined,
+    };
+    try {
+      await api(`/api/profiles/${profile.id}/health/ketones`, { method: 'POST', body });
+      setFlash('Ketone reading saved', 'ok');
+      render();
+    } catch (err) {
+      if (err.data?.needsConfirmation) {
+        if (confirm(`${err.message}`)) {
+          await api(`/api/profiles/${profile.id}/health/ketones`, {
+            method: 'POST',
+            body: { ...body, confirmUnusual: true },
+          });
+          setFlash('Ketone reading saved', 'ok');
           render();
         }
         return;
@@ -1120,16 +1185,18 @@ async function renderHealth() {
 async function renderTrends() {
   const profile = requireProfile();
   const from = new Date(Date.now() - 90 * 86400000).toISOString();
-  const [bsRes, weightRes, bpRes] = await Promise.all([
+  const [bsRes, weightRes, bpRes, ketoneRes] = await Promise.all([
     api(`/api/profiles/${profile.id}/health/blood-sugar?from=${from}&take=500`),
     api(`/api/profiles/${profile.id}/health/weight?from=${from}&take=500`),
     api(`/api/profiles/${profile.id}/health/blood-pressure?from=${from}&take=500`),
+    api(`/api/profiles/${profile.id}/health/ketones?from=${from}&take=500`),
   ]);
 
   const byTimeAsc = (a, b) => new Date(a.takenAt) - new Date(b.takenAt);
   const bloodSugar = [...(bsRes.readings || [])].sort(byTimeAsc);
   const weight = [...(weightRes.readings || [])].sort(byTimeAsc);
   const bloodPressure = [...(bpRes.readings || [])].sort(byTimeAsc);
+  const ketones = [...(ketoneRes.readings || [])].sort(byTimeAsc);
 
   const app = $('#app');
   app.innerHTML = shell(`
@@ -1160,6 +1227,15 @@ async function renderTrends() {
           ? `<div class="chart-box"><canvas id="bp-chart"></canvas></div>
              <p class="muted">${bloodPressure.length} readings</p>`
           : `<p class="empty">No blood pressure readings in this range.</p>`
+      }
+    </section>
+    <section class="panel">
+      <h2>Ketones</h2>
+      ${
+        ketones.length
+          ? `<div class="chart-box"><canvas id="ketone-chart"></canvas></div>
+             <p class="muted">${ketones.length} readings</p>`
+          : `<p class="empty">No ketone readings in this range.</p>`
       }
     </section>
   `);
@@ -1234,6 +1310,26 @@ async function renderTrends() {
             borderColor: '#3b5bdb',
             tension: 0.25,
             pointRadius: bloodPressure.length < 20 ? 4 : 2,
+          },
+        ],
+      },
+      options: chartDefaults,
+    });
+  }
+
+  if (ketones.length && $('#ketone-chart')) {
+    new Chart($('#ketone-chart'), {
+      type: 'line',
+      data: {
+        labels: ketones.map((r) => new Date(r.takenAt).toLocaleDateString()),
+        datasets: [
+          {
+            label: 'Ketones (mmol/L or as logged)',
+            data: ketones.map((r) => Number(r.value)),
+            borderColor: '#0b6e99',
+            backgroundColor: 'rgba(11, 110, 153, 0.12)',
+            tension: 0.25,
+            pointRadius: ketones.length < 20 ? 4 : 2,
           },
         ],
       },

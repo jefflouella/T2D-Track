@@ -54,6 +54,7 @@ export async function gatherReportData(profileId, options) {
     bloodSugar,
     weight,
     bloodPressure,
+    ketones,
     a1c,
     targets,
     completion7,
@@ -96,6 +97,10 @@ export async function gatherReportData(profileId, options) {
       where: { personProfileId: profileId, deletedAt: null, takenAt: { gte: from, lte: to } },
       orderBy: { takenAt: 'asc' },
     }),
+    prisma.ketoneReading.findMany({
+      where: { personProfileId: profileId, deletedAt: null, takenAt: { gte: from, lte: to } },
+      orderBy: { takenAt: 'asc' },
+    }),
     prisma.a1CReading.findMany({
       where: { personProfileId: profileId, deletedAt: null, takenAt: { gte: from, lte: to } },
       orderBy: { takenAt: 'asc' },
@@ -124,6 +129,7 @@ export async function gatherReportData(profileId, options) {
     bloodSugar,
     weight,
     bloodPressure,
+    ketones,
     a1c,
     targets,
     tir,
@@ -198,7 +204,7 @@ export async function buildDoctorPdf(profileId, options) {
   doc.moveDown();
   doc.fontSize(14).text('Reading counts in range');
   doc.fontSize(11).text(
-    `Blood sugar: ${data.bloodSugar.length} | Weight: ${data.weight.length} | Blood pressure: ${data.bloodPressure.length} | A1C: ${data.a1c.length}`,
+    `Blood sugar: ${data.bloodSugar.length} | Weight: ${data.weight.length} | Blood pressure: ${data.bloodPressure.length} | Ketones: ${data.ketones.length} | A1C: ${data.a1c.length}`,
   );
 
   if (data.targets.length) {
@@ -240,6 +246,12 @@ export async function buildDoctorPdf(profileId, options) {
     for (const r of data.bloodSugar) {
       doc.text(`${r.takenAt.toISOString()} | ${decimalToString(r.value)} ${r.unit} | ${r.context}`);
     }
+    doc.moveDown();
+    doc.fontSize(14).text('Ketone readings');
+    doc.fontSize(9);
+    for (const r of data.ketones) {
+      doc.text(`${r.takenAt.toISOString()} | ${decimalToString(r.value)} ${r.unit} | ${r.context}`);
+    }
   }
 
   const pages = doc.bufferedPageRange();
@@ -278,6 +290,20 @@ export function reportDataToCsv(data) {
     lines.push(
       [
         'blood_sugar',
+        r.takenAt.toISOString(),
+        '',
+        decimalToString(r.value),
+        r.unit,
+        r.context,
+        '',
+        JSON.stringify(r.notes || ''),
+      ].join(','),
+    );
+  }
+  for (const r of data.ketones) {
+    lines.push(
+      [
+        'ketone',
         r.takenAt.toISOString(),
         '',
         decimalToString(r.value),

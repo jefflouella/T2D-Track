@@ -41,6 +41,7 @@ router.post(
       bloodSugarCount: data.bloodSugar.length,
       weightCount: data.weight.length,
       bloodPressureCount: data.bloodPressure.length,
+      ketoneCount: data.ketones.length,
       a1cCount: data.a1c.length,
       tir: data.tir,
       completion7: data.completion7,

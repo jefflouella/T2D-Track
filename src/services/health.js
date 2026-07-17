@@ -48,6 +48,31 @@ export async function createWeight({ profileId, userId, data }) {
   return reading;
 }
 
+export async function createKetone({ profileId, userId, data }) {
+  const profile = await getProfile(profileId);
+  const reading = await prisma.ketoneReading.create({
+    data: {
+      personProfileId: profileId,
+      value: toDecimal(data.value),
+      unit: data.unit || 'mmol_L',
+      context: data.context || 'random',
+      takenAt: data.takenAt ? new Date(data.takenAt) : new Date(),
+      notes: data.notes || null,
+      recordedByUserId: userId,
+    },
+  });
+  await writeAudit({
+    householdId: profile.householdId,
+    personProfileId: profileId,
+    actorUserId: userId,
+    action: 'health.ketone.created',
+    entityType: 'KetoneReading',
+    entityId: reading.id,
+    summary: 'Logged ketone reading',
+  });
+  return reading;
+}
+
 export async function createBloodPressure({ profileId, userId, data }) {
   const profile = await getProfile(profileId);
   const reading = await prisma.bloodPressureReading.create({

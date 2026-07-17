@@ -6,6 +6,7 @@ import { asyncHandler, serializeReading } from '../util.js';
 import {
   createBloodSugar,
   createWeight,
+  createKetone,
   createBloodPressure,
   createA1c,
   softDeleteReading,
@@ -162,6 +163,91 @@ router.delete(
     const existing = await prisma.weightReading.findUnique({ where: { id: req.params.id } });
     await assertReadingAccess(req.user.id, existing, 'manage');
     const reading = await softDeleteReading(prisma.weightReading, req.params.id, req.user.id);
+    res.json({ reading: serializeReading(reading) });
+  }),
+);
+
+router.post(
+  '/profiles/:profileId/health/ketones',
+  requireAuth,
+  requireManageAccess('profileId'),
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        value: z.union([z.string(), z.number()]),
+        unit: z.enum(['mmol_L', 'mg_dL']).optional(),
+        context: z.enum(['fasting', 'random', 'illness', 'exercise', 'other']).optional(),
+        takenAt: z.string().optional(),
+        notes: z.string().optional(),
+        confirmUnusual: z.boolean().optional(),
+      })
+      .parse(req.body);
+    const value = Number(body.value);
+    const unit = body.unit || 'mmol_L';
+    // Soft sanity check only; no clinical alarm. Blood meters typically report mmol/L.
+    const unusual =
+      unit === 'mmol_L' ? value < 0 || value > 8 : value < 0 || value > 144;
+    if (unusual && !body.confirmUnusual) {
+      return res.status(400).json({
+        error: 'Unusual ketone value. Confirm to save.',
+        needsConfirmation: true,
+      });
+    }
+    const reading = await createKetone({
+      profileId: req.params.profileId,
+      userId: req.user.id,
+      data: body,
+    });
+    res.status(201).json({ reading: serializeReading(reading) });
+  }),
+);
+
+router.get(
+  '/profiles/:profileId/health/ketones',
+  requireAuth,
+  requireViewAccess('profileId'),
+  asyncHandler(async (req, res) => {
+    const readings = await listReadings(prisma.ketoneReading, req.params.profileId, req.query);
+    res.json({ readings: readings.map(serializeReading) });
+  }),
+);
+
+router.put(
+  '/health/ketones/:id',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.ketoneReading.findUnique({ where: { id: req.params.id } });
+    await assertReadingAccess(req.user.id, existing, 'manage');
+    const body = z
+      .object({
+        value: z.union([z.string(), z.number()]).optional(),
+        unit: z.enum(['mmol_L', 'mg_dL']).optional(),
+        context: z.enum(['fasting', 'random', 'illness', 'exercise', 'other']).optional(),
+        takenAt: z.string().optional(),
+        notes: z.string().optional().nullable(),
+      })
+      .parse(req.body);
+    const reading = await prisma.ketoneReading.update({
+      where: { id: req.params.id },
+      data: {
+        value: body.value != null ? body.value : undefined,
+        unit: body.unit,
+        context: body.context,
+        takenAt: body.takenAt ? new Date(body.takenAt) : undefined,
+        notes: body.notes,
+      },
+    });
+    res.json({ reading: serializeReading(reading) });
+  }),
+);
+
+router.delete(
+  '/health/ketones/:id',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.ketoneReading.findUnique({ where: { id: req.params.id } });
+    await assertReadingAccess(req.user.id, existing, 'manage');
+    const reading = await softDeleteReading(prisma.ketoneReading, req.params.id, req.user.id);
     res.json({ reading: serializeReading(reading) });
   }),
 );
@@ -338,7 +424,7 @@ router.put(
       .object({
         targets: z.array(
           z.object({
-            metricType: z.enum(['blood_sugar', 'systolic', 'diastolic', 'weight', 'a1c']),
+            metricType: z.enum(['blood_sugar', 'systolic', 'diastolic', 'weight', 'a1c', 'ketone']),
             context: z.string().optional(),
             lowValue: z.union([z.string(), z.number()]).optional().nullable(),
             highValue: z.union([z.string(), z.number()]).optional().nullable(),

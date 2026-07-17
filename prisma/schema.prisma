@@ -39,6 +39,19 @@ enum WeightUnit {
   kg
 }
 
+enum KetoneUnit {
+  mmol_L
+  mg_dL
+}
+
+enum KetoneContext {
+  fasting
+  random
+  illness
+  exercise
+  other
+}
+
 enum MedicationStatus {
   active
   paused
@@ -146,6 +159,7 @@ enum HealthMetricType {
   diastolic
   weight
   a1c
+  ketone
 }
 
 model Household {
@@ -193,6 +207,8 @@ model User {
   deletedWeightReadings       WeightReading[]             @relation("WeightDeleter")
   bloodPressureReadings       BloodPressureReading[]      @relation("BpRecorder")
   deletedBloodPressureReadings BloodPressureReading[]     @relation("BpDeleter")
+  ketoneReadings              KetoneReading[]             @relation("KetoneRecorder")
+  deletedKetoneReadings       KetoneReading[]             @relation("KetoneDeleter")
   a1cReadings                 A1CReading[]                @relation("A1cRecorder")
   deletedA1cReadings          A1CReading[]                @relation("A1cDeleter")
   labResults                  LabResult[]                 @relation("LabRecorder")
@@ -274,6 +290,7 @@ model PersonProfile {
   bloodSugarReadings          BloodSugarReading[]
   weightReadings              WeightReading[]
   bloodPressureReadings       BloodPressureReading[]
+  ketoneReadings              KetoneReading[]
   a1cReadings                 A1CReading[]
   labResults                  LabResult[]
   healthTargets               HealthTarget[]
@@ -567,6 +584,28 @@ model WeightReading {
 
   @@index([personProfileId, takenAt])
   @@map("weight_readings")
+}
+
+model KetoneReading {
+  id               String        @id @default(cuid())
+  personProfileId  String        @map("person_profile_id")
+  value            Decimal       @db.Decimal(18, 6)
+  unit             KetoneUnit    @default(mmol_L)
+  context          KetoneContext @default(random)
+  takenAt          DateTime      @map("taken_at")
+  notes            String?
+  recordedByUserId String        @map("recorded_by_user_id")
+  deletedAt        DateTime?     @map("deleted_at")
+  deletedByUserId  String?       @map("deleted_by_user_id")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  personProfile  PersonProfile @relation(fields: [personProfileId], references: [id], onDelete: Cascade)
+  recordedByUser User          @relation("KetoneRecorder", fields: [recordedByUserId], references: [id])
+  deletedByUser  User?         @relation("KetoneDeleter", fields: [deletedByUserId], references: [id])
+
+  @@index([personProfileId, takenAt])
+  @@map("ketone_readings")
 }
 
 model BloodPressureReading {

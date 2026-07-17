@@ -264,6 +264,7 @@ export async function exportUserData(userId) {
               bloodSugarReadings: true,
               weightReadings: true,
               bloodPressureReadings: true,
+              ketoneReadings: true,
               a1cReadings: true,
               healthTargets: true,
             },
