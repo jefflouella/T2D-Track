@@ -6,3 +6,4 @@ public/assets/
 coverage/
 *.log
 .prisma/
+data/
