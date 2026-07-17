@@ -791,11 +791,44 @@ async function renderMedicationDetail(id, kindHint = 'medication') {
     <section class="panel">
       <h2>Schedules</h2>
       <ul>${(medication.schedules || [])
+        .filter((s) => s.active)
         .map(
           (s) =>
-            `<li>${escapeHtml(s.scheduleType)} ${escapeHtml(s.timeOfDay || '')} ${escapeHtml((s.daysOfWeek || []).join(','))} · ${escapeHtml(s.doseEntry)} · ${escapeHtml(s.unitsPerDose ?? '')}</li>`,
+            `<li><strong>${escapeHtml(s.scheduleType)}</strong> ${escapeHtml(s.timeOfDay || '')} ${escapeHtml((s.daysOfWeek || []).join(','))} · ${escapeHtml(s.doseEntry)} · ${escapeHtml(s.unitsPerDose ?? '')} ${escapeHtml(medication.stockUnit)}
+            <span class="muted">from ${escapeHtml(String(s.startDate).slice(0, 10))}${s.endDate ? ` to ${escapeHtml(String(s.endDate).slice(0, 10))}` : ''}</span></li>`,
         )
-        .join('')}</ul>
+        .join('') || '<li class="muted">No active schedules</li>'}</ul>
+      ${(medication.schedules || []).some((s) => !s.active)
+        ? `<details style="margin-top:0.75rem"><summary class="muted">Past schedules</summary><ul>${(medication.schedules || [])
+            .filter((s) => !s.active)
+            .map(
+              (s) =>
+                `<li class="muted">${escapeHtml(s.scheduleType)} ${escapeHtml(s.timeOfDay || '')} · ${escapeHtml(s.unitsPerDose ?? '')} (ended)</li>`,
+            )
+            .join('')}</ul></details>`
+        : ''}
+      <h3 style="margin-top:1.25rem">Change schedule</h3>
+      <p class="muted">For example: take 2 tablets starting in two weeks. Current schedule ends the day before the effective date.</p>
+      <form id="schedule-replace-form" class="stack">
+        <label>Effective start date<input name="startDate" type="date" required value="${new Date().toISOString().slice(0, 10)}" /></label>
+        <label>Times of day (comma-separated HH:MM)<input name="times" value="${escapeHtml(
+          (medication.schedules || [])
+            .filter((s) => s.active && s.timeOfDay)
+            .map((s) => s.timeOfDay)
+            .join(',') || '08:00',
+        )}" placeholder="08:00 or 08:00,20:00" /></label>
+        <label>Units per dose<input name="unitsPerDose" type="number" step="any" min="0" value="${escapeHtml(
+          (medication.schedules || []).find((s) => s.active)?.unitsPerDose ?? medication.defaultUnitsPerDose ?? '1',
+        )}" /></label>
+        <label>Schedule type
+          <select name="scheduleType">
+            <option value="daily" selected>Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="as_needed">As needed</option>
+          </select>
+        </label>
+        <button type="submit">Save new schedule</button>
+      </form>
     </section>
     <section class="panel">
       <h2>Inventory ledger</h2>
@@ -847,6 +880,30 @@ async function renderMedicationDetail(id, kindHint = 'medication') {
       const nextId = result.medication?.id || id;
       setFlash('Details saved', 'ok');
       navigate(`${basePath}/${nextId}`);
+    } catch (err) {
+      setFlash(err.message, 'error');
+    }
+  });
+
+  $('#schedule-replace-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const times = String(fd.get('times') || '')
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    try {
+      await api(`/api/medications/${id}/schedules/replace`, {
+        method: 'POST',
+        body: {
+          startDate: fd.get('startDate'),
+          timesOfDay: times,
+          unitsPerDose: fd.get('unitsPerDose'),
+          scheduleType: fd.get('scheduleType'),
+        },
+      });
+      setFlash('Schedule updated', 'ok');
+      render();
     } catch (err) {
       setFlash(err.message, 'error');
     }

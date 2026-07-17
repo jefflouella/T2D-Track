@@ -1,6 +1,6 @@
 // src/client/sw.js
-var CACHE = "t2d-shell-v1";
-var SHELL = ["/", "/index.html", "/styles.css", "/assets/app.js", "/manifest.webmanifest", "/icons/icon.svg"];
+var CACHE = "t2d-shell-v2";
+var SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icons/icon.svg"];
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
 });
@@ -16,6 +16,19 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.pathname.startsWith("/api/")) return;
+  const networkFirst = url.pathname.startsWith("/assets/") || url.pathname === "/styles.css" || url.pathname === "/sw.js";
+  if (networkFirst) {
+    event.respondWith(
+      fetch(request).then((response) => {
+        if (response.ok && url.origin === self.location.origin) {
+          const copy = response.clone();
+          caches.open(CACHE).then((cache) => cache.put(request, copy));
+        }
+        return response;
+      }).catch(() => caches.match(request))
+    );
+    return;
+  }
   event.respondWith(
     caches.match(request).then((cached) => {
       const network = fetch(request).then((response) => {

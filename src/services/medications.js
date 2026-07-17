@@ -288,3 +288,95 @@ export async function enrichMedicationWithSupply(medication, timezone) {
   });
   return { ...medication, supply: estimate };
 }
+
+/**
+ * End active timed schedules the day before `startDate`, then create new ones.
+ * Use for dose/time changes that should take effect on a future (or today) date.
+ */
+export async function replaceTimedSchedules({ medicationId, userId, data }) {
+  const med = await prisma.medication.findUnique({
+    where: { id: medicationId },
+    include: { personProfile: true, schedules: true },
+  });
+  if (!med) throw new HttpError(404, 'Medication not found');
+
+  const times = normalizeTimes(data.timesOfDay || []);
+  if (!times.length && data.scheduleType !== 'as_needed') {
+    throw new HttpError(400, 'At least one time of day is required');
+  }
+
+  const startDate = data.startDate ? new Date(data.startDate) : new Date();
+  const endPrior = new Date(startDate);
+  endPrior.setUTCDate(endPrior.getUTCDate() - 1);
+
+  const scheduleType = data.scheduleType || 'daily';
+  const unitsPerDose =
+    data.unitsPerDose != null ? toDecimal(data.unitsPerDose) : toDecimal(med.defaultUnitsPerDose);
+  const doseEntry = data.doseEntry || 'fixed';
+
+  await prisma.$transaction(async (tx) => {
+    await tx.medicationSchedule.updateMany({
+      where: {
+        medicationId,
+        active: true,
+        scheduleType: { in: ['daily', 'weekly', 'interval'] },
+      },
+      data: {
+        active: false,
+        endDate: endPrior,
+      },
+    });
+
+    if (scheduleType === 'as_needed') {
+      await tx.medicationSchedule.create({
+        data: {
+          medicationId,
+          label: data.scheduleLabel || 'As needed',
+          scheduleType: 'as_needed',
+          doseEntry,
+          unitsPerDose,
+          startDate,
+          gracePeriodMinutes: data.gracePeriodMinutes ?? 120,
+        },
+      });
+    } else {
+      for (const timeOfDay of times) {
+        await tx.medicationSchedule.create({
+          data: {
+            medicationId,
+            label: data.scheduleLabel || timeOfDay,
+            scheduleType,
+            timeOfDay,
+            daysOfWeek: scheduleType === 'weekly' ? data.daysOfWeek || [] : [],
+            doseEntry,
+            unitsPerDose,
+            startDate,
+            gracePeriodMinutes: data.gracePeriodMinutes ?? 120,
+          },
+        });
+      }
+    }
+
+    if (data.unitsPerDose != null) {
+      await tx.medication.update({
+        where: { id: medicationId },
+        data: { defaultUnitsPerDose: unitsPerDose },
+      });
+    }
+  });
+
+  await writeAudit({
+    householdId: med.personProfile.householdId,
+    personProfileId: med.personProfileId,
+    actorUserId: userId,
+    action: 'medication.schedule_replaced',
+    entityType: 'Medication',
+    entityId: medicationId,
+    summary: `Schedule updated effective ${startDate.toISOString().slice(0, 10)}`,
+  });
+
+  return prisma.medication.findUnique({
+    where: { id: medicationId },
+    include: { schedules: true },
+  });
+}

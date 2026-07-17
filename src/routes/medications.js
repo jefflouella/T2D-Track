@@ -8,6 +8,7 @@ import {
   updateMedication,
   setMedicationStatus,
   enrichMedicationWithSupply,
+  replaceTimedSchedules,
 } from '../services/medications.js';
 import {
   recordRefill,
@@ -196,6 +197,32 @@ router.post(
       },
     });
     res.status(201).json({ schedule });
+  }),
+);
+
+router.post(
+  '/medications/:id/schedules/replace',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    await assertMedicationAccess(req.user.id, req.params.id, 'manage');
+    const body = z
+      .object({
+        scheduleType: z.enum(['daily', 'weekly', 'as_needed']).optional(),
+        timesOfDay: z.array(z.string()).optional(),
+        daysOfWeek: z.array(z.string()).optional(),
+        doseEntry: z.enum(['fixed', 'variable']).optional(),
+        unitsPerDose: z.union([z.string(), z.number()]).optional().nullable(),
+        startDate: z.string().min(1),
+        gracePeriodMinutes: z.number().int().optional(),
+        scheduleLabel: z.string().optional(),
+      })
+      .parse(req.body);
+    const med = await replaceTimedSchedules({
+      medicationId: req.params.id,
+      userId: req.user.id,
+      data: body,
+    });
+    res.json({ medication: serializeMedication(med) });
   }),
 );
 
