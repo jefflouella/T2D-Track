@@ -1,5 +1,5 @@
 // src/client/sw.js
-var CACHE = "t2d-shell-v4";
+var CACHE = "t2d-shell-v5";
 var SHELL = [
   "/",
   "/index.html",

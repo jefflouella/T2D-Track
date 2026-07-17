@@ -1,4 +1,4 @@
-const CACHE = 't2d-shell-v4';
+const CACHE = 't2d-shell-v5';
 const SHELL = [
   '/',
   '/index.html',

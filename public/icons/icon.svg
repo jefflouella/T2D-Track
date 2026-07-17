@@ -1,16 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="T2D Track">
   <rect width="512" height="512" fill="#0f6b5c"/>
-  <!-- Bold T monogram; padded for iOS / Android adaptive masks -->
+  <!-- Blood / glucose drop -->
   <path
     fill="#f3f0e8"
-    d="M148 148h216v54H286v162h-60V202H148z"
+    d="M256 92
+       C256 92 162 222 162 304
+       C162 360 204 408 256 408
+       C308 408 350 360 350 304
+       C350 222 256 92 256 92Z"
   />
-  <!-- Soft cream underline tick suggesting a track / reading -->
+  <!-- Mini bar chart -->
+  <rect x="190" y="318" width="28" height="42" rx="6" fill="#0a4d42"/>
+  <rect x="230" y="292" width="28" height="68" rx="6" fill="#0a4d42"/>
+  <rect x="270" y="268" width="28" height="92" rx="6" fill="#0a4d42"/>
+  <!-- Ascending trend over bars -->
   <path
     fill="none"
-    stroke="#f2e2c9"
-    stroke-width="26"
+    stroke="#0a4d42"
+    stroke-width="16"
     stroke-linecap="round"
-    d="M176 392h160"
+    stroke-linejoin="round"
+    d="M204 308 L244 278 L284 252 L324 228"
   />
+  <circle cx="324" cy="228" r="12" fill="#0a4d42"/>
 </svg>
