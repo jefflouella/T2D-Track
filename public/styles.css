@@ -65,12 +65,23 @@ img {
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
   font-family: var(--font-display);
   font-weight: 650;
   font-size: 1.35rem;
   letter-spacing: -0.02em;
   color: var(--brand-dark);
   text-decoration: none;
+}
+
+.brand-mark {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.45rem;
+  flex-shrink: 0;
+  display: block;
 }
 
 .nav {

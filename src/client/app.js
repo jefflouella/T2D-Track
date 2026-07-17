@@ -180,7 +180,10 @@ function shell(content, { showNav = true } = {}) {
       : '';
   return `
     <header class="topbar">
-      <a class="brand" href="${state.user ? '/today' : '/'}">T2D Track</a>
+      <a class="brand" href="${state.user ? '/today' : '/'}">
+        <img class="brand-mark" src="/icons/icon.svg" width="32" height="32" alt="" />
+        <span>T2D Track</span>
+      </a>
       ${profileSwitcher}
       ${nav}
     </header>
