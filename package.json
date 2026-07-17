@@ -1,0 +1,41 @@
+{
+  "name": "t2d-track",
+  "version": "1.0.0",
+  "description": "Self-hosted medication and health tracking for T2D care",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "build": "node scripts/build-assets.js",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "test": "node --test test/**/*.test.js",
+    "reconcile-stock": "node scripts/reconcile-stock.js",
+    "catalog:seed": "node scripts/seed-drug-catalog.js",
+    "catalog:import": "node scripts/import-rxterms.js",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.11.1",
+    "bcryptjs": "^3.0.2",
+    "chart.js": "^4.5.0",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "luxon": "^3.6.1",
+    "pdfkit": "^0.17.1",
+    "resend": "^4.6.0",
+    "web-push": "^3.6.7",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.6",
+    "prisma": "^6.11.1"
+  }
+}

@@ -1,0 +1,774 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MembershipRole {
+  owner
+  member
+  caregiver
+}
+
+enum ProfilePermission {
+  owner
+  manage
+  view
+}
+
+enum InvitationRole {
+  member
+  caregiver
+}
+
+enum AccountTokenPurpose {
+  verify_email
+  password_reset
+}
+
+enum GlucoseUnit {
+  mg_dL
+  mmol_L
+}
+
+enum WeightUnit {
+  lb
+  kg
+}
+
+enum MedicationStatus {
+  active
+  paused
+  stopped
+}
+
+enum MedicationKind {
+  medication
+  supplement
+}
+
+enum ScheduleType {
+  daily
+  weekly
+  as_needed
+  interval
+}
+
+enum DoseEntryMode {
+  fixed
+  variable
+}
+
+enum RefillWorkflowStatus {
+  none
+  requested
+  ready
+  picked_up
+  cancelled
+  last_refill
+}
+
+enum SupplyStatus {
+  active
+  archived
+}
+
+enum DoseEventStatus {
+  pending
+  snoozed
+  taken
+  skipped
+  missed
+}
+
+enum DoseEventSource {
+  app
+  notification
+  backfill
+  import
+}
+
+enum InventoryKind {
+  opening
+  dose
+  refill
+  adjustment
+  waste
+  reversal
+}
+
+enum NotificationChannel {
+  push
+  email
+}
+
+enum NotificationType {
+  dose_due
+  dose_follow_up
+  low_stock
+  caregiver_missed
+}
+
+enum DeliveryStatus {
+  pending
+  sent
+  failed
+  suppressed
+}
+
+enum BloodSugarContext {
+  fasting
+  before_meal
+  after_meal
+  bedtime
+  exercise
+  illness
+  random
+  other
+}
+
+enum BloodPressureContext {
+  morning
+  evening
+  resting
+  before_exercise
+  after_exercise
+  illness
+  other
+}
+
+enum HealthMetricType {
+  blood_sugar
+  systolic
+  diastolic
+  weight
+  a1c
+}
+
+model Household {
+  id              String   @id @default(cuid())
+  name            String
+  defaultTimezone String   @map("default_timezone")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  memberships HouseholdMembership[]
+  profiles    PersonProfile[]
+  invitations Invitation[]
+  auditEvents AuditEvent[]
+
+  @@map("households")
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String    @map("password_hash")
+  name            String
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  totpSecret      String?   @map("totp_secret")
+  totpEnabledAt   DateTime? @map("totp_enabled_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  sessions                    Session[]
+  accountTokens               AccountToken[]
+  memberships                 HouseholdMembership[]
+  linkedProfiles              PersonProfile[]             @relation("LinkedUser")
+  createdProfiles             PersonProfile[]             @relation("CreatedByUser")
+  profileAccess               ProfileAccess[]
+  createdInvitations          Invitation[]
+  notificationPreference      NotificationPreference?
+  profileNotificationSettings ProfileNotificationSetting[]
+  pushSubscriptions           PushSubscription[]
+  notificationDeliveries      NotificationDelivery[]
+  inventoryTransactions       InventoryTransaction[]
+  loggedDoseEvents            DoseEvent[]
+  bloodSugarReadings          BloodSugarReading[]         @relation("BloodSugarRecorder")
+  deletedBloodSugarReadings   BloodSugarReading[]         @relation("BloodSugarDeleter")
+  weightReadings              WeightReading[]             @relation("WeightRecorder")
+  deletedWeightReadings       WeightReading[]             @relation("WeightDeleter")
+  bloodPressureReadings       BloodPressureReading[]      @relation("BpRecorder")
+  deletedBloodPressureReadings BloodPressureReading[]     @relation("BpDeleter")
+  a1cReadings                 A1CReading[]                @relation("A1cRecorder")
+  deletedA1cReadings          A1CReading[]                @relation("A1cDeleter")
+  labResults                  LabResult[]                 @relation("LabRecorder")
+  deletedLabResults           LabResult[]                 @relation("LabDeleter")
+  symptomNotes                SymptomNote[]
+  healthTargets               HealthTarget[]
+  auditEvents                 AuditEvent[]
+  deleteRequests              AccountDeleteRequest[]
+  webAuthnCredentials         WebAuthnCredential[]
+
+  @@map("users")
+}
+
+model AccountToken {
+  id        String              @id @default(cuid())
+  userId    String              @map("user_id")
+  tokenHash String              @unique @map("token_hash")
+  purpose   AccountTokenPurpose
+  expiresAt DateTime            @map("expires_at")
+  usedAt    DateTime?           @map("used_at")
+  createdAt DateTime            @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@map("account_tokens")
+}
+
+model Session {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  lastSeenAt DateTime? @map("last_seen_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model HouseholdMembership {
+  id          String         @id @default(cuid())
+  householdId String         @map("household_id")
+  userId      String         @map("user_id")
+  role        MembershipRole
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, userId])
+  @@map("household_memberships")
+}
+
+model PersonProfile {
+  id             String      @id @default(cuid())
+  householdId    String      @map("household_id")
+  linkedUserId   String?     @map("linked_user_id")
+  displayName    String      @map("display_name")
+  dateOfBirth    DateTime?   @map("date_of_birth") @db.Date
+  timezone       String
+  glucoseUnit    GlucoseUnit @map("glucose_unit")
+  weightUnit     WeightUnit  @map("weight_unit")
+  createdByUserId String     @map("created_by_user_id")
+  onboardingCompletedAt DateTime? @map("onboarding_completed_at")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  household                   Household                    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  linkedUser                  User?                        @relation("LinkedUser", fields: [linkedUserId], references: [id])
+  createdByUser               User                         @relation("CreatedByUser", fields: [createdByUserId], references: [id])
+  access                      ProfileAccess[]
+  invitations                 Invitation[]
+  medications                 Medication[]
+  doseEvents                  DoseEvent[]
+  bloodSugarReadings          BloodSugarReading[]
+  weightReadings              WeightReading[]
+  bloodPressureReadings       BloodPressureReading[]
+  a1cReadings                 A1CReading[]
+  labResults                  LabResult[]
+  healthTargets               HealthTarget[]
+  profileNotificationSettings ProfileNotificationSetting[]
+  auditEvents                 AuditEvent[]
+  supplies                    SupplyItem[]
+  symptomNotes                SymptomNote[]
+
+  @@index([householdId])
+  @@map("person_profiles")
+}
+
+model ProfileAccess {
+  id              String            @id @default(cuid())
+  personProfileId String            @map("person_profile_id")
+  userId          String            @map("user_id")
+  permission      ProfilePermission
+  createdAt       DateTime          @default(now()) @map("created_at")
+
+  personProfile PersonProfile @relation(fields: [personProfileId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([personProfileId, userId])
+  @@map("profile_access")
+}
+
+model Invitation {
+  id               String         @id @default(cuid())
+  householdId      String         @map("household_id")
+  tokenHash        String         @unique @map("token_hash")
+  role             InvitationRole
+  personProfileId  String?        @map("person_profile_id")
+  permission       ProfilePermission?
+  expiresAt        DateTime       @map("expires_at")
+  maxUses          Int            @default(1) @map("max_uses")
+  useCount         Int            @default(0) @map("use_count")
+  revokedAt        DateTime?      @map("revoked_at")
+  createdByUserId  String         @map("created_by_user_id")
+  createdAt        DateTime       @default(now()) @map("created_at")
+
+  household     Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  personProfile PersonProfile? @relation(fields: [personProfileId], references: [id])
+  createdByUser User          @relation(fields: [createdByUserId], references: [id])
+
+  @@map("invitations")
+}
+
+model Medication {
+  id                   String           @id @default(cuid())
+  personProfileId      String           @map("person_profile_id")
+  kind                 MedicationKind   @default(medication)
+  name                 String
+  rxcui                String?
+  form                 String?
+  strengthValue        Decimal?         @map("strength_value") @db.Decimal(18, 6)
+  strengthUnit         String?          @map("strength_unit")
+  stockUnit            String           @map("stock_unit")
+  defaultUnitsPerDose  Decimal          @default(1) @map("default_units_per_dose") @db.Decimal(18, 6)
+  trackInjectionSite   Boolean          @default(false) @map("track_injection_site")
+  instructions         String?
+  refillThresholdDays  Int              @default(7) @map("refill_threshold_days")
+  refillLeadTimeDays   Int              @default(3) @map("refill_lead_time_days")
+  pharmacy             String?
+  prescriptionNumber   String?          @map("prescription_number")
+  refillsRemaining     Int?             @map("refills_remaining")
+  refillEligibleOn     DateTime?        @map("refill_eligible_on") @db.Date
+  refillWorkflowStatus RefillWorkflowStatus @default(none) @map("refill_workflow_status")
+  holdUntil            DateTime?        @map("hold_until")
+  prescriber           String?
+  notes                String?
+  startDate            DateTime?        @map("start_date") @db.Date
+  endDate              DateTime?        @map("end_date") @db.Date
+  status               MedicationStatus @default(active)
+  currentStockCache    Decimal          @default(0) @map("current_stock_cache") @db.Decimal(18, 6)
+  replacedById         String?          @map("replaced_by_id")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+
+  personProfile         PersonProfile          @relation(fields: [personProfileId], references: [id], onDelete: Cascade)
+  schedules             MedicationSchedule[]
+  doseEvents            DoseEvent[]
+  inventoryTransactions InventoryTransaction[]
+  notificationDeliveries NotificationDelivery[]
+  replacedBy            Medication?            @relation("MedicationReplacement", fields: [replacedById], references: [id])
+  replaces              Medication[]           @relation("MedicationReplacement")
+
+  @@index([personProfileId, status])
+  @@map("medications")
+}
+
+model MedicationSchedule {
+  id                 String        @id @default(cuid())
+  medicationId       String        @map("medication_id")
+  label              String?
+  scheduleType       ScheduleType  @map("schedule_type")
+  timeOfDay          String?       @map("time_of_day")
+  daysOfWeek         String[]      @map("days_of_week")
+  intervalHours      Int?          @map("interval_hours")
+  doseEntry          DoseEntryMode @default(fixed) @map("dose_entry")
+  unitsPerDose       Decimal?      @map("units_per_dose") @db.Decimal(18, 6)
+  startDate          DateTime      @map("start_date") @db.Date
+  endDate            DateTime?     @map("end_date") @db.Date
+  gracePeriodMinutes Int           @default(120) @map("grace_period_minutes")
+  active             Boolean       @default(true)
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  medication Medication  @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  doseEvents DoseEvent[]
+
+  @@index([medicationId, active])
+  @@map("medication_schedules")
+}
+
+model DoseEvent {
+  id                String          @id @default(cuid())
+  medicationId      String          @map("medication_id")
+  scheduleId        String?         @map("schedule_id")
+  personProfileId   String          @map("person_profile_id")
+  scheduledFor      DateTime?       @map("scheduled_for")
+  localScheduledDate DateTime?      @map("local_scheduled_date") @db.Date
+  status            DoseEventStatus @default(pending)
+  snoozedUntil      DateTime?       @map("snoozed_until")
+  takenAt           DateTime?       @map("taken_at")
+  amountTaken       Decimal?        @map("amount_taken") @db.Decimal(18, 6)
+  injectionSite     String?         @map("injection_site")
+  loggedByUserId    String?         @map("logged_by_user_id")
+  source            DoseEventSource @default(app)
+  notes             String?
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  medication             Medication              @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  schedule               MedicationSchedule?     @relation(fields: [scheduleId], references: [id])
+  personProfile          PersonProfile           @relation(fields: [personProfileId], references: [id], onDelete: Cascade)
+  loggedByUser           User?                   @relation(fields: [loggedByUserId], references: [id])
+  inventoryTransactions  InventoryTransaction[]
+  notificationDeliveries NotificationDelivery[]
+
+  // Unique only when scheduleId is not null; NULL schedule IDs are distinct in Postgres (as-needed events).
+  @@unique([scheduleId, scheduledFor])
+  @@index([personProfileId, scheduledFor])
+  @@index([status, scheduledFor])
+  @@map("dose_events")
+}
+
+model InventoryTransaction {
+  id                    String        @id @default(cuid())
+  medicationId          String?       @map("medication_id")
+  supplyItemId          String?       @map("supply_item_id")
+  doseEventId           String?       @map("dose_event_id")
+  kind                  InventoryKind
+  quantityDelta         Decimal       @map("quantity_delta") @db.Decimal(18, 6)
+  balanceAfter          Decimal       @map("balance_after") @db.Decimal(18, 6)
+  occurredAt            DateTime      @map("occurred_at")
+  recordedByUserId      String        @map("recorded_by_user_id")
+  idempotencyKey        String?       @unique @map("idempotency_key")
+  reversesTransactionId String?       @map("reverses_transaction_id")
+  notes                 String?
+  createdAt             DateTime      @default(now()) @map("created_at")
+
+  medication          Medication?            @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  supplyItem          SupplyItem?            @relation(fields: [supplyItemId], references: [id], onDelete: Cascade)
+  doseEvent           DoseEvent?             @relation(fields: [doseEventId], references: [id])
+  recordedByUser      User                   @relation(fields: [recordedByUserId], references: [id])
+  reversesTransaction InventoryTransaction?  @relation("InventoryReversal", fields: [reversesTransactionId], references: [id])
+  reversedBy          InventoryTransaction[] @relation("InventoryReversal")
+
+  @@index([medicationId, occurredAt])
+  @@index([supplyItemId, occurredAt])
+  @@map("inventory_transactions")
+}
+
+model NotificationPreference {
+  id                    String    @id @default(cuid())
+  userId                String    @unique @map("user_id")
+  dosePushEnabled       Boolean   @default(true) @map("dose_push_enabled")
+  lowStockEmailEnabled  Boolean   @default(true) @map("low_stock_email_enabled")
+  caregiverAlertEnabled Boolean   @default(false) @map("caregiver_alert_enabled")
+  privatePreview        Boolean   @default(false) @map("private_preview")
+  quietHoursStart       String?   @map("quiet_hours_start")
+  quietHoursEnd         String?   @map("quiet_hours_end")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model ProfileNotificationSetting {
+  id                    String   @id @default(cuid())
+  userId                String   @map("user_id")
+  personProfileId       String   @map("person_profile_id")
+  dosePushEnabled       Boolean  @default(true) @map("dose_push_enabled")
+  caregiverAlertEnabled Boolean  @default(false) @map("caregiver_alert_enabled")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  personProfile PersonProfile @relation(fields: [personProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, personProfileId])
+  @@map("profile_notification_settings")
+}
+
+model PushSubscription {
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  endpoint      String    @unique
+  p256dh        String
+  auth          String
+  deviceLabel   String?   @map("device_label")
+  active        Boolean   @default(true)
+  lastSuccessAt DateTime? @map("last_success_at")
+  lastFailureAt DateTime? @map("last_failure_at")
+  failureCount  Int       @default(0) @map("failure_count")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user                   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notificationDeliveries NotificationDelivery[]
+
+  @@index([userId, active])
+  @@map("push_subscriptions")
+}
+
+model NotificationDelivery {
+  id                 String              @id @default(cuid())
+  userId             String              @map("user_id")
+  pushSubscriptionId String?             @map("push_subscription_id")
+  doseEventId        String?             @map("dose_event_id")
+  medicationId       String?             @map("medication_id")
+  channel            NotificationChannel
+  type               NotificationType
+  dedupeKey          String              @unique @map("dedupe_key")
+  status             DeliveryStatus      @default(pending)
+  attemptCount       Int                 @default(0) @map("attempt_count")
+  lastErrorCode      String?             @map("last_error_code")
+  sentAt             DateTime?           @map("sent_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pushSubscription PushSubscription? @relation(fields: [pushSubscriptionId], references: [id])
+  doseEvent        DoseEvent?        @relation(fields: [doseEventId], references: [id])
+  medication       Medication?       @relation(fields: [medicationId], references: [id])
+
+  @@index([status, createdAt])
+  @@map("notification_deliveries")
+}
+
+model BloodSugarReading {
+  id              String            @id @default(cuid())
+  personProfileId String            @map("person_profile_id")
+  value           Decimal           @db.Decimal(18, 6)
+  unit            GlucoseUnit
+  context         BloodSugarContext
+  takenAt         DateTime          @map("taken_at")
+  notes           String?
+  recordedByUserId String           @map("recorded_by_user_id")
+  deletedAt       DateTime?         @map("deleted_at")
+  deletedByUserId String?           @map("deleted_by_user_id")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  personProfile  PersonProfile @relation(fields: [personProfileId], references: [id], onDelete: Cascade)
+  recordedByUser User          @relation("BloodSugarRecorder", fields: [recordedByUserId], references: [id])
+  deletedByUser  User?         @relation("BloodSugarDeleter", fields: [deletedByUserId], references: [id])
+
+  @@index([personProfileId, takenAt])
+  @@map("blood_sugar_readings")
+}
+
+model WeightReading {
+  id               String     @id @default(cuid())
+  personProfileId  String     @map("person_profile_id")
+  value            Decimal    @db.Decimal(18, 6)
+  unit             WeightUnit
+  takenAt          DateTime   @map("taken_at")
+  notes            String?
+  recordedByUserId String     @map("recorded_by_user_id")
+  deletedAt        DateTime?  @map("deleted_at")
+  deletedByUserId  String?    @map("deleted_by_user_id")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+
+  personProfile  PersonProfile @relation(fields: [personProfileId], references: [id], onDelete: Cascade)
+  recordedByUser User          @relation("WeightRecorder", fields: [recordedByUserId], references: [id])
+  deletedByUser  User?         @relation("WeightDeleter", fields: [deletedByUserId], references: [id])
+
+  @@index([personProfileId, takenAt])
+  @@map("weight_readings")
+}
+
+model BloodPressureReading {
+  id               String               @id @default(cuid())
+  personProfileId  String               @map("person_profile_id")
+  systolic         Int
+  diastolic        Int
+  pulse            Int?
+  context          BloodPressureContext
+  takenAt          DateTime             @map("taken_at")
+  notes            String?
+  recordedByUserId String               @map("recorded_by_user_id")
+  deletedAt        DateTime?            @map("deleted_at")
+  deletedByUserId  String?              @map("deleted_by_user_id")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  personProfile  PersonProfile @relation(fields: [personProfileId], references: [id], onDelete: Cascade)
+  recordedByUser User          @relation("BpRecorder", fields: [recordedByUserId], references: [id])
+  deletedByUser  User?         @relation("BpDeleter", fields: [deletedByUserId], references: [id])
+
+  @@index([personProfileId, takenAt])
+  @@map("blood_pressure_readings")
+}
+
+model A1CReading {
+  id               String    @id @default(cuid())
+  personProfileId  String    @map("person_profile_id")
+  valuePercent     Decimal   @map("value_percent") @db.Decimal(18, 6)
+  takenAt          DateTime  @map("taken_at") @db.Date
+  laboratory       String?
+  notes            String?
+  recordedByUserId String    @map("recorded_by_user_id")
+  deletedAt        DateTime? @map("deleted_at")
+  deletedByUserId  String?   @map("deleted_by_user_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  personProfile  PersonProfile @relation(fields: [personProfileId], references: [id], onDelete: Cascade)
+  recordedByUser User          @relation("A1cRecorder", fields: [recordedByUserId], references: [id])
+  deletedByUser  User?         @relation("A1cDeleter", fields: [deletedByUserId], references: [id])
+
+  @@index([personProfileId, takenAt])
+  @@map("a1c_readings")
+}
+
+model HealthTarget {
+  id               String           @id @default(cuid())
+  personProfileId  String           @map("person_profile_id")
+  metricType       HealthMetricType @map("metric_type")
+  context          String           @default("any")
+  lowValue         Decimal?         @map("low_value") @db.Decimal(18, 6)
+  highValue        Decimal?         @map("high_value") @db.Decimal(18, 6)
+  unit             String
+  label            String?
+  createdByUserId  String           @map("created_by_user_id")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  personProfile  PersonProfile @relation(fields: [personProfileId], references: [id], onDelete: Cascade)
+  createdByUser  User          @relation(fields: [createdByUserId], references: [id])
+
+  @@unique([personProfileId, metricType, context])
+  @@map("health_targets")
+}
+
+model AuditEvent {
+  id              String   @id @default(cuid())
+  householdId     String   @map("household_id")
+  personProfileId String?  @map("person_profile_id")
+  actorUserId     String?  @map("actor_user_id")
+  action          String
+  entityType      String   @map("entity_type")
+  entityId        String   @map("entity_id")
+  summary         String
+  metadata        Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  household     Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  personProfile PersonProfile? @relation(fields: [personProfileId], references: [id])
+  actorUser     User?         @relation(fields: [actorUserId], references: [id])
+
+  @@index([householdId, createdAt])
+  @@map("audit_events")
+}
+
+model SchedulerCheckpoint {
+  name              String    @id
+  lastSuccessfulAt  DateTime  @map("last_successful_at")
+  lastStartedAt     DateTime? @map("last_started_at")
+  lastErrorCode     String?   @map("last_error_code")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@map("scheduler_checkpoints")
+}
+
+model AccountDeleteRequest {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  requestedAt DateTime @default(now()) @map("requested_at")
+  processedAt DateTime? @map("processed_at")
+  notes     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("account_delete_requests")
+}
+
+model SupplyItem {
+  id                  String       @id @default(cuid())
+  personProfileId     String       @map("person_profile_id")
+  name                String
+  stockUnit           String       @map("stock_unit")
+  refillThresholdDays Int?         @map("refill_threshold_days")
+  expectedDailyUse    Decimal?     @map("expected_daily_use") @db.Decimal(18, 6)
+  status              SupplyStatus @default(active)
+  currentStockCache   Decimal      @default(0) @map("current_stock_cache") @db.Decimal(18, 6)
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  personProfile         PersonProfile          @relation(fields: [personProfileId], references: [id], onDelete: Cascade)
+  inventoryTransactions InventoryTransaction[]
+
+  @@index([personProfileId, status])
+  @@map("supply_items")
+}
+
+model LabResult {
+  id               String    @id @default(cuid())
+  personProfileId  String    @map("person_profile_id")
+  testName         String    @map("test_name")
+  value            Decimal   @db.Decimal(18, 6)
+  unit             String
+  takenAt          DateTime  @map("taken_at") @db.Date
+  laboratory       String?
+  notes            String?
+  recordedByUserId String    @map("recorded_by_user_id")
+  deletedAt        DateTime? @map("deleted_at")
+  deletedByUserId  String?   @map("deleted_by_user_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  personProfile  PersonProfile @relation(fields: [personProfileId], references: [id], onDelete: Cascade)
+  recordedByUser User          @relation("LabRecorder", fields: [recordedByUserId], references: [id])
+  deletedByUser  User?         @relation("LabDeleter", fields: [deletedByUserId], references: [id])
+
+  @@index([personProfileId, takenAt])
+  @@map("lab_results")
+}
+
+model DrugCatalogEntry {
+  id                 String   @id @default(cuid())
+  displayName        String   @map("display_name")
+  synonyms           String[]
+  isBrand            Boolean  @default(false) @map("is_brand")
+  genericDisplayName String?  @map("generic_display_name")
+  strengthsAndForms  Json     @map("strengths_and_forms")
+  sourceVersion      String   @map("source_version")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@index([displayName])
+  @@map("drug_catalog_entries")
+}
+
+model SymptomNote {
+  id               String   @id @default(cuid())
+  personProfileId  String   @map("person_profile_id")
+  kind             String   @default("symptom")
+  summary          String
+  details          String?
+  mood             Int?
+  tags             String[] @default([])
+  startedAt        DateTime @map("started_at")
+  endedAt          DateTime? @map("ended_at")
+  recordedByUserId String   @map("recorded_by_user_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  personProfile  PersonProfile @relation(fields: [personProfileId], references: [id], onDelete: Cascade)
+  recordedByUser User          @relation(fields: [recordedByUserId], references: [id])
+
+  @@index([personProfileId, startedAt])
+  @@index([personProfileId, kind, startedAt])
+  @@map("symptom_notes")
+}
+
+model WebAuthnCredential {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  credentialId String   @unique @map("credential_id")
+  publicKey    String   @map("public_key")
+  counter      BigInt   @default(0)
+  deviceType   String?  @map("device_type")
+  backedUp     Boolean  @default(false) @map("backed_up")
+  transports   String[]
+  createdAt    DateTime @default(now()) @map("created_at")
+  lastUsedAt   DateTime? @map("last_used_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("webauthn_credentials")
+}

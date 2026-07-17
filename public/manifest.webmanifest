@@ -1,0 +1,17 @@
+{
+  "name": "T2D Track",
+  "short_name": "T2D Track",
+  "description": "Medication and health tracking for diabetes care visits",
+  "start_url": "/today",
+  "display": "standalone",
+  "background_color": "#f3f0e8",
+  "theme_color": "#0f6b5c",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

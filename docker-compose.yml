@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: t2d
+      POSTGRES_PASSWORD: t2d
+      POSTGRES_DB: t2d_track
+    ports:
+      - "5432:5432"
+    volumes:
+      - t2d_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U t2d -d t2d_track"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  t2d_pgdata:
