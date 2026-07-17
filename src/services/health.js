@@ -102,10 +102,12 @@ export async function listReadings(model, profileId, { from, to, context, cursor
   if (context) where.context = context;
   if (cursor) where.id = { lt: cursor };
 
+  const limit = Math.min(Math.max(Number(take) || 50, 1), 500);
+
   return model.findMany({
     where,
     orderBy: [{ takenAt: 'desc' }, { id: 'desc' }],
-    take,
+    take: limit,
   });
 }
 

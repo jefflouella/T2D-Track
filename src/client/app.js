@@ -1017,36 +1017,127 @@ async function renderHealth() {
 
 async function renderTrends() {
   const profile = requireProfile();
-  const { readings } = await api(`/api/profiles/${profile.id}/health/blood-sugar?from=${new Date(Date.now() - 90 * 86400000).toISOString()}`);
+  const from = new Date(Date.now() - 90 * 86400000).toISOString();
+  const [bsRes, weightRes, bpRes] = await Promise.all([
+    api(`/api/profiles/${profile.id}/health/blood-sugar?from=${from}&take=500`),
+    api(`/api/profiles/${profile.id}/health/weight?from=${from}&take=500`),
+    api(`/api/profiles/${profile.id}/health/blood-pressure?from=${from}&take=500`),
+  ]);
+
+  const byTimeAsc = (a, b) => new Date(a.takenAt) - new Date(b.takenAt);
+  const bloodSugar = [...(bsRes.readings || [])].sort(byTimeAsc);
+  const weight = [...(weightRes.readings || [])].sort(byTimeAsc);
+  const bloodPressure = [...(bpRes.readings || [])].sort(byTimeAsc);
+
   const app = $('#app');
   app.innerHTML = shell(`
+    <h1 class="hero-brand">Trends</h1>
+    <p class="lede">Last 90 days. Sparse data is labeled, not interpreted.</p>
     <section class="panel">
-      <h1 class="hero-brand">Trends</h1>
-      <p class="lede">Blood sugar over the last 90 days. Sparse data is labeled, not interpreted.</p>
-      <div class="chart-box"><canvas id="bs-chart"></canvas></div>
-      <p class="muted">${readings.length} readings in range</p>
+      <h2>Blood sugar</h2>
+      ${
+        bloodSugar.length
+          ? `<div class="chart-box"><canvas id="bs-chart"></canvas></div>
+             <p class="muted">${bloodSugar.length} readings</p>`
+          : `<p class="empty">No blood sugar readings in this range.</p>`
+      }
+    </section>
+    <section class="panel">
+      <h2>Weight</h2>
+      ${
+        weight.length
+          ? `<div class="chart-box"><canvas id="weight-chart"></canvas></div>
+             <p class="muted">${weight.length} readings</p>`
+          : `<p class="empty">No weight readings in this range.</p>`
+      }
+    </section>
+    <section class="panel">
+      <h2>Blood pressure</h2>
+      ${
+        bloodPressure.length
+          ? `<div class="chart-box"><canvas id="bp-chart"></canvas></div>
+             <p class="muted">${bloodPressure.length} readings</p>`
+          : `<p class="empty">No blood pressure readings in this range.</p>`
+      }
     </section>
   `);
-  const ctx = $('#bs-chart');
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: readings.map((r) => new Date(r.takenAt).toLocaleDateString()),
-      datasets: [
-        {
-          label: `Blood sugar (${profile.glucoseUnit})`,
-          data: readings.map((r) => Number(r.value)),
-          borderColor: '#0f6b5c',
-          tension: 0.25,
-        },
-      ],
+
+  const chartDefaults = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: true } },
+    scales: {
+      x: {
+        ticks: { maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 8 },
+      },
     },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: true } },
-    },
-  });
+  };
+
+  if (bloodSugar.length && $('#bs-chart')) {
+    new Chart($('#bs-chart'), {
+      type: 'line',
+      data: {
+        labels: bloodSugar.map((r) => new Date(r.takenAt).toLocaleDateString()),
+        datasets: [
+          {
+            label: `Blood sugar (${profile.glucoseUnit || 'mg/dL'})`,
+            data: bloodSugar.map((r) => Number(r.value)),
+            borderColor: '#0f6b5c',
+            backgroundColor: 'rgba(15, 107, 92, 0.12)',
+            tension: 0.25,
+            pointRadius: bloodSugar.length < 20 ? 4 : 2,
+          },
+        ],
+      },
+      options: chartDefaults,
+    });
+  }
+
+  if (weight.length && $('#weight-chart')) {
+    new Chart($('#weight-chart'), {
+      type: 'line',
+      data: {
+        labels: weight.map((r) => new Date(r.takenAt).toLocaleDateString()),
+        datasets: [
+          {
+            label: `Weight (${profile.weightUnit || 'lb'})`,
+            data: weight.map((r) => Number(r.value)),
+            borderColor: '#a35b12',
+            backgroundColor: 'rgba(163, 91, 18, 0.12)',
+            tension: 0.25,
+            pointRadius: weight.length < 20 ? 4 : 2,
+          },
+        ],
+      },
+      options: chartDefaults,
+    });
+  }
+
+  if (bloodPressure.length && $('#bp-chart')) {
+    new Chart($('#bp-chart'), {
+      type: 'line',
+      data: {
+        labels: bloodPressure.map((r) => new Date(r.takenAt).toLocaleDateString()),
+        datasets: [
+          {
+            label: 'Systolic',
+            data: bloodPressure.map((r) => Number(r.systolic)),
+            borderColor: '#9b2c2c',
+            tension: 0.25,
+            pointRadius: bloodPressure.length < 20 ? 4 : 2,
+          },
+          {
+            label: 'Diastolic',
+            data: bloodPressure.map((r) => Number(r.diastolic)),
+            borderColor: '#3b5bdb',
+            tension: 0.25,
+            pointRadius: bloodPressure.length < 20 ? 4 : 2,
+          },
+        ],
+      },
+      options: chartDefaults,
+    });
+  }
 }
 
 async function renderReports() {
