@@ -407,6 +407,11 @@ const FEELING_TAGS = [
   'thirsty',
   'hungry',
   'anxious',
+  'energetic',
+  'rested',
+  'focused',
+  'calm',
+  'steady',
   'good',
   'other',
 ];
